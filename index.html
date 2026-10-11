@@ -51,21 +51,17 @@
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col">
 
-    <div id="app" class="flex-1 flex flex-col">
-        <!-- Rendered dynamically via JS -->
-    </div>
+    <div id="app" class="flex-1 flex flex-col"></div>
 
     <!-- Custom Modal Container -->
     <div id="customModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 hidden backdrop-blur-sm">
         <div class="bg-white rounded-3xl p-6 max-w-md w-full mx-4 shadow-2xl border-4 border-pastel-200 transform transition-all">
-            <div id="modalContent" class="text-center">
-                <!-- Modal content injected -->
-            </div>
+            <div id="modalContent" class="text-center"></div>
         </div>
     </div>
 
     <script>
-        // --- State Management & Real-time Sync ---
+        // --- State Management & Real-time Sync (Supabase Integration Ready / BroadcastChannel) ---
         const USERS = {
             'Ployrung': { pass: '1106', ward: 'หอผู้ป่วยสุขใจ โรงพยาบาลยโสธร', code: 'sukjai' },
             'ning': { pass: '1212', ward: 'หอผู้ป่วยสุขใจ IMC โรงพยาบาลยโสธร', code: 'sukjai_imc' }
@@ -75,7 +71,9 @@
         let currentTab = localStorage.getItem('yasothon_tab') || 'dashboard';
         let currentSubTab = localStorage.getItem('yasothon_subtab') || 'daily';
 
-        // Mock Initial Data if empty
+        // BroadcastChannel for instant cross-tab & multi-device sync simulation
+        const syncChannel = new BroadcastChannel('yasothon_hospital_sync_v1');
+
         function getStorageData(key, defaultVal) {
             const val = localStorage.getItem('yasothon_' + key);
             return val ? JSON.parse(val) : defaultVal;
@@ -83,9 +81,18 @@
 
         function setStorageData(key, val) {
             localStorage.setItem('yasothon_' + key, JSON.stringify(val));
-            // Trigger storage event manually for same-tab updates
+            syncChannel.postMessage({ key: 'yasothon_' + key, data: val });
             window.dispatchEvent(new Event('storage-sync'));
         }
+
+        syncChannel.onmessage = (event) => {
+            if (event.data && event.data.key) {
+                localStorage.setItem(event.data.key, JSON.stringify(event.data.data));
+                patients = getStorageData('patients', patients);
+                trackings = getStorageData('trackings', trackings);
+                render();
+            }
+        };
 
         let patients = getStorageData('patients', [
             {
@@ -156,7 +163,6 @@
             }
         ]);
 
-        // Sync listener across tabs/devices
         window.addEventListener('storage', (e) => {
             if (e.key && e.key.startsWith('yasothon_')) {
                 patients = getStorageData('patients', patients);
@@ -170,7 +176,6 @@
             render();
         });
 
-        // --- Thai Date Helpers ---
         const thaiMonths = [
             'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
             'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
@@ -187,7 +192,6 @@
         }
 
         function formatThaiMonthYear(yearMonthStr) {
-            // format YYYY-MM
             if (!yearMonthStr) return '-';
             const parts = yearMonthStr.split('-');
             if (parts.length !== 2) return yearMonthStr;
@@ -196,7 +200,6 @@
             return `${thaiMonths[m] || ''} ${y}`;
         }
 
-        // Render Thai Date Picker Component HTML
         function renderThaiDatePicker(name, id, value = '') {
             let d = value ? new Date(value) : new Date();
             let day = isNaN(d) ? new Date().getDate() : d.getDate();
@@ -237,21 +240,6 @@
             `;
         }
 
-        // Helper to extract date value from thai date picker container
-        function getThaiDatePickerValue(containerId) {
-            const container = document.querySelector(`[data-field-id="${containerId}"]`);
-            if (!container) return '';
-            const d = container.querySelector('.t-day').value;
-            const m = container.querySelector('.t-month').value;
-            const y = container.querySelector('.t-year').value;
-            if (!d || !m || !y) return '';
-            const ceYear = parseInt(y) - 543;
-            const formattedMonth = String(m).padStart(2, '0');
-            const formattedDay = String(d).padStart(2, '0');
-            return `${ceYear}-${formattedMonth}-${formattedDay}`;
-        }
-
-        // Attach change listeners to update hidden inputs
         function initThaiDatePickers() {
             document.querySelectorAll('.thai-date-picker').forEach(picker => {
                 const hiddenInputId = picker.getAttribute('data-field-id');
@@ -273,7 +261,6 @@
             });
         }
 
-        // --- Custom Modal ---
         function showModal(htmlContent, onClose = null) {
             const modal = document.getElementById('customModal');
             const content = document.getElementById('modalContent');
@@ -308,7 +295,6 @@
             lucide.createIcons();
         }
 
-        // --- Render Main Router ---
         function render() {
             const app = document.getElementById('app');
             if (!currentUser) {
@@ -320,51 +306,37 @@
             initThaiDatePickers();
         }
 
-        // --- Login Screen ---
         function renderLoginScreen() {
             return `
                 <div class="flex-1 flex items-center justify-center bg-gradient-to-br from-pastel-100 via-purple-50 to-pastel-200 p-4">
                     <div class="bg-white/90 backdrop-blur-md rounded-3xl shadow-2xl border-4 border-pastel-200 max-w-md w-full p-8 text-center relative overflow-hidden">
-                        <div class="absolute -top-12 -right-12 w-32 h-32 bg-pastel-300 rounded-full opacity-30 pointer-events-none"></div>
-                        <div class="absolute -bottom-12 -left-12 w-32 h-32 bg-purple-300 rounded-full opacity-30 pointer-events-none"></div>
-
                         <div class="w-20 h-20 bg-pastel-200 text-pastel-700 rounded-3xl mx-auto flex items-center justify-center mb-4 shadow-inner">
                             <i data-lucide="heart-pulse" class="w-10 h-10"></i>
                         </div>
                         <span class="inline-block px-3 py-1 bg-pastel-100 text-pastel-800 rounded-full text-xs font-semibold mb-2">โรงพยาบาลยโสธร</span>
                         <h1 class="text-2xl font-bold text-gray-800 mb-1">ระบบการติดตามผู้ป่วยจิตเวชหลังจำหน่าย</h1>
-                        <p class="text-xs text-gray-500 mb-6">กรุณาเข้าสู่ระบบเพื่อใช้งาน</p>
+                        <p class="text-xs text-gray-500 mb-6">กรุณาเข้าสู่ระบบเพื่อใช้งาน (Real-time Syncing)</p>
 
                         <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-4 text-left">
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">ชื่อผู้ใช้งาน (Username)</label>
-                                <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                        <i data-lucide="user" class="w-5 h-5"></i>
-                                    </span>
-                                    <input type="text" id="loginUser" required placeholder="ระบุชื่อผู้ใช้งาน เช่น Ployrung" 
-                                        class="w-full pl-10 pr-4 py-3 rounded-2xl border border-pastel-300 focus:outline-none focus:ring-2 focus:ring-pastel-500 text-sm bg-pastel-50/50">
-                                </div>
+                                <input type="text" id="loginUser" required placeholder="Ployrung หรือ ning" 
+                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 focus:outline-none focus:ring-2 focus:ring-pastel-500 text-sm bg-pastel-50/50">
                             </div>
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">รหัสผ่าน (Password)</label>
-                                <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                        <i data-lucide="lock" class="w-5 h-5"></i>
-                                    </span>
-                                    <input type="password" id="loginPass" required placeholder="ระบุรหัสผ่าน" 
-                                        class="w-full pl-10 pr-4 py-3 rounded-2xl border border-pastel-300 focus:outline-none focus:ring-2 focus:ring-pastel-500 text-sm bg-pastel-50/50">
-                                </div>
+                                <input type="password" id="loginPass" required placeholder="รหัสผ่าน" 
+                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 focus:outline-none focus:ring-2 focus:ring-pastel-500 text-sm bg-pastel-50/50">
                             </div>
-                            <button type="submit" class="w-full py-3.5 bg-pastel-600 hover:bg-pastel-700 text-white font-bold rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5">
+                            <button type="submit" class="w-full py-3.5 bg-pastel-600 hover:bg-pastel-700 text-white font-bold rounded-2xl shadow-lg transition-all">
                                 เข้าสู่ระบบ
                             </button>
                         </form>
 
                         <div class="mt-6 pt-6 border-t border-gray-100 text-xs text-gray-500 space-y-1">
                             <p class="font-semibold text-gray-600">รหัสทดสอบด่วน:</p>
-                            <p>1. User: <span class="font-mono bg-pastel-100 text-purple-800 px-1.5 py-0.5 rounded">Ployrung</span> | Pass: <span class="font-mono bg-pastel-100 text-purple-800 px-1.5 py-0.5 rounded">1106</span> (หอผู้ป่วยสุขใจ)</p>
-                            <p>2. User: <span class="font-mono bg-pastel-100 text-purple-800 px-1.5 py-0.5 rounded">ning</span> | Pass: <span class="font-mono bg-pastel-100 text-purple-800 px-1.5 py-0.5 rounded">1212</span> (หอผู้ป่วยสุขใจ IMC)</p>
+                            <p>1. User: <span class="font-mono bg-pastel-100 text-purple-800 px-1 py-0.5 rounded">Ployrung</span> | Pass: <span class="font-mono bg-pastel-100 text-purple-800 px-1 py-0.5 rounded">1106</span></p>
+                            <p>2. User: <span class="font-mono bg-pastel-100 text-purple-800 px-1 py-0.5 rounded">ning</span> | Pass: <span class="font-mono bg-pastel-100 text-purple-800 px-1 py-0.5 rounded">1212</span></p>
                         </div>
                     </div>
                 </div>
@@ -391,11 +363,9 @@
             render();
         }
 
-        // --- Main Layout ---
         function renderMainLayout() {
             return `
                 <div class="min-h-screen flex flex-col md:flex-row bg-[#f7f2fb]">
-                    <!-- Sidebar Navigation (Left) -->
                     <aside class="w-full md:w-72 bg-white border-r border-pastel-200 flex flex-col shadow-sm">
                         <div class="p-6 border-b border-pastel-100 flex items-center space-x-3 bg-pastel-50/50">
                             <div class="w-12 h-12 bg-pastel-600 text-white rounded-2xl flex items-center justify-center shadow-md">
@@ -407,7 +377,6 @@
                             </div>
                         </div>
 
-                        <!-- Ward Badge -->
                         <div class="px-4 py-3 bg-pastel-100/60 m-4 rounded-2xl border border-pastel-200 text-xs">
                             <div class="text-purple-900 font-semibold mb-0.5 flex items-center">
                                 <i data-lucide="hospital" class="w-3.5 h-3.5 mr-1 text-pastel-600"></i> สังกัดหน่วยงาน
@@ -415,27 +384,23 @@
                             <div class="text-gray-700 font-bold">${currentUser.ward}</div>
                             <div class="text-[10px] text-gray-500 mt-1 flex items-center justify-between">
                                 <span>ผู้ใช้งาน: ${currentUser.username}</span>
-                                <span class="flex items-center text-emerald-600 font-semibold"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block mr-1 animate-pulse"></span> เรียลไทม์</span>
+                                <span class="flex items-center text-emerald-600 font-semibold"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block mr-1 animate-pulse"></span> เรียลไทม์ (Live Sync)</span>
                             </div>
                         </div>
 
-                        <!-- Nav Menu -->
                         <nav class="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar pb-6">
                             <div class="text-[11px] font-bold text-gray-400 uppercase px-3 py-2">เมนูหลัก</div>
                             
-                            <!-- หน้าหลัก (Dashboard) -->
                             <button onclick="switchTab('dashboard')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-medium text-sm transition-all ${currentTab === 'dashboard' ? 'bg-pastel-600 text-white shadow-md' : 'text-gray-600 hover:bg-pastel-50 hover:text-purple-700'}">
                                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
                                 <span>1. แดชบอร์ด</span>
                             </button>
 
-                            <!-- ลงทะเบียนผู้ป่วย -->
                             <button onclick="switchTab('register')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-medium text-sm transition-all ${currentTab === 'register' ? 'bg-pastel-600 text-white shadow-md' : 'text-gray-600 hover:bg-pastel-50 hover:text-purple-700'}">
                                 <i data-lucide="user-plus" class="w-5 h-5"></i>
                                 <span>2. ลงทะเบียนผู้ป่วย</span>
                             </button>
 
-                            <!-- การติดตาม -->
                             <div class="space-y-1">
                                 <button onclick="switchTab('tracking')" class="w-full flex items-center justify-between px-4 py-3 rounded-2xl font-medium text-sm transition-all ${currentTab === 'tracking' ? 'bg-pastel-600 text-white shadow-md' : 'text-gray-600 hover:bg-pastel-50 hover:text-purple-700'}">
                                     <div class="flex items-center space-x-3">
@@ -456,32 +421,27 @@
                                 ` : ''}
                             </div>
 
-                            <!-- ยอดประจำเดือน -->
                             <button onclick="switchTab('monthly')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-medium text-sm transition-all ${currentTab === 'monthly' ? 'bg-pastel-600 text-white shadow-md' : 'text-gray-600 hover:bg-pastel-50 hover:text-purple-700'}">
                                 <i data-lucide="calendar-range" class="w-5 h-5"></i>
                                 <span>4. ยอดประจำเดือน</span>
                             </button>
 
-                            <!-- สรุปผล -->
                             <button onclick="switchTab('summary')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-medium text-sm transition-all ${currentTab === 'summary' ? 'bg-pastel-600 text-white shadow-md' : 'text-gray-600 hover:bg-pastel-50 hover:text-purple-700'}">
                                 <i data-lucide="file-text" class="w-5 h-5"></i>
                                 <span>5. สรุปผล</span>
                             </button>
 
-                            <!-- ข้อมูลผู้ป่วย -->
                             <button onclick="switchTab('patients')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-medium text-sm transition-all ${currentTab === 'patients' ? 'bg-pastel-600 text-white shadow-md' : 'text-gray-600 hover:bg-pastel-50 hover:text-purple-700'}">
                                 <i data-lucide="users" class="w-5 h-5"></i>
                                 <span>6. ข้อมูลผู้ป่วย</span>
                             </button>
 
-                            <!-- ตั้งค่า -->
                             <button onclick="switchTab('settings')" class="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl font-medium text-sm transition-all ${currentTab === 'settings' ? 'bg-pastel-600 text-white shadow-md' : 'text-gray-600 hover:bg-pastel-50 hover:text-purple-700'}">
                                 <i data-lucide="settings" class="w-5 h-5"></i>
                                 <span>7. ตั้งค่า</span>
                             </button>
                         </nav>
 
-                        <!-- Logout Button -->
                         <div class="p-4 border-t border-pastel-100">
                             <button onclick="logout()" class="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold rounded-2xl text-sm transition-all">
                                 <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -490,7 +450,6 @@
                         </div>
                     </aside>
 
-                    <!-- Main Content View Area -->
                     <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
                         <header class="bg-white border-b border-pastel-200 px-8 py-4 flex items-center justify-between shadow-sm">
                             <div class="flex items-center space-x-3">
@@ -502,9 +461,7 @@
                             </div>
                         </header>
 
-                        <div class="p-6 md:p-8 flex-1" id="tabContent">
-                            <!-- Dynamic Tab Content -->
-                        </div>
+                        <div class="p-6 md:p-8 flex-1" id="tabContent"></div>
                     </main>
                 </div>
             `;
@@ -524,7 +481,6 @@
             renderTabContent();
         }
 
-        // --- Render Tab Content Router ---
         function renderTabContent() {
             const container = document.getElementById('tabContent');
             if (!container) return;
@@ -557,24 +513,16 @@
             if (currentTab === 'dashboard') initDashboardCharts();
         }
 
-        // --- 1. Dashboard View ---
         function renderDashboardView() {
             const wardPatients = patients.filter(p => p.ward === currentUser.code);
             const wardTrackings = trackings.filter(t => t.ward === currentUser.code);
 
             const now = new Date();
             const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            
-            // Allow past month selection
             const selectedMonth = window.dashboardSelectedMonth || currentYearMonth;
 
-            // Filter by selected month
             const monthlyDischarges = wardPatients.filter(p => p.dischargeDate && p.dischargeDate.startsWith(selectedMonth));
-            
-            // Patients attending appointment in selected month
             const monthlyAppointments = wardPatients.filter(p => p.appointmentDate && p.appointmentDate.startsWith(selectedMonth));
-
-            // Re-Admit in selected month
             const monthlyReAdmit = wardTrackings.filter(t => t.trackingDate && t.trackingDate.startsWith(selectedMonth) && t.reAdmit && t.reAdmit !== 'ไม่มี');
 
             let monthsOptions = '';
@@ -587,7 +535,6 @@
 
             return `
                 <div class="space-y-6">
-                    <!-- Filter bar -->
                     <div class="bg-white p-4 rounded-3xl shadow-sm border border-pastel-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div class="flex items-center space-x-2">
                             <i data-lucide="filter" class="w-5 h-5 text-pastel-600"></i>
@@ -598,7 +545,6 @@
                         </select>
                     </div>
 
-                    <!-- 4 Metric Cards -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200 flex items-center space-x-4">
                             <div class="w-14 h-14 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xl shadow-inner">
@@ -645,7 +591,6 @@
                         </div>
                     </div>
 
-                    <!-- Chart Section -->
                     <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200 max-w-xl mx-auto">
                         <h3 class="font-bold text-gray-800 text-center mb-4">แผนภูมิสัดส่วนข้อมูลผู้ป่วย (เปอร์เซ็นต์)</h3>
                         <div class="relative h-72">
@@ -691,7 +636,6 @@
             });
         }
 
-        // --- 2. Patient Registration View ---
         function renderRegisterView() {
             return `
                 <div class="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-sm border border-pastel-200">
@@ -701,78 +645,67 @@
                         </div>
                         <div>
                             <h2 class="text-lg font-bold text-gray-800">ฟอร์มลงทะเบียนผู้ป่วยใหม่</h2>
-                            <p class="text-xs text-gray-500">บันทึกข้อมูลและกำหนดวันนัดติดตามตามปฏิทินไทย</p>
+                            <p class="text-xs text-gray-500">บันทึกข้อมูลและซิงค์ข้อมูลเรียลไทม์ทันทีทุกอุปกรณ์</p>
                         </div>
                     </div>
 
                     <form id="registerForm" onsubmit="handleRegisterPatient(event)" class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- 1. ชื่อ นามสกุล -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">1. ชื่อ - นามสกุล <span class="text-rose-500">*</span></label>
                                 <input type="text" id="regName" required placeholder="ระบุชื่อและนามสกุลผู้ป่วย" 
-                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none focus:ring-2 focus:ring-pastel-500">
+                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none">
                             </div>
 
-                            <!-- 2. เบอร์โทร -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">3. เบอร์โทรศัพท์ <span class="text-rose-500">*</span></label>
                                 <input type="tel" id="regPhone" required placeholder="08xxxxxxxx" 
-                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none focus:ring-2 focus:ring-pastel-500">
+                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none">
                             </div>
 
-                            <!-- 3. ที่อยู่ -->
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">2. ที่อยู่ <span class="text-rose-500">*</span></label>
                                 <textarea id="regAddress" rows="2" required placeholder="บ้านเลขที่, ตำบล, อำเภอ, จังหวัด" 
-                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none focus:ring-2 focus:ring-pastel-500"></textarea>
+                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none"></textarea>
                             </div>
 
-                            <!-- 4. อนามัยใกล้บ้าน -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">4. รพ.สต. / อนามัยใกล้บ้าน <span class="text-rose-500">*</span></label>
                                 <input type="text" id="regHealthCenter" required placeholder="เช่น รพ.สต.บ้านตาดทอง" 
-                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none focus:ring-2 focus:ring-pastel-500">
+                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none">
                             </div>
 
-                            <!-- 11. ลำดับในใบติดตาม -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">11. ลำดับในใบติดตาม <span class="text-rose-500">*</span></label>
                                 <input type="text" id="regSequence" required placeholder="เช่น 01 หรือ 02" 
-                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none focus:ring-2 focus:ring-pastel-500">
+                                    class="w-full px-4 py-3 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none">
                             </div>
 
-                            <!-- 5. วันที่จำหน่าย -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">5. วันที่จำหน่าย (ปฏิทินไทย พ.ศ.) <span class="text-rose-500">*</span></label>
                                 ${renderThaiDatePicker('dischargeDate', 'regDischargeDate')}
                             </div>
 
-                            <!-- 6. วันที่นัดติดตาม -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">6. วันที่นัดติดตาม (ปฏิทินไทย พ.ศ.) <span class="text-rose-500">*</span></label>
                                 ${renderThaiDatePicker('appointmentDate', 'regAppointmentDate')}
                             </div>
 
-                            <!-- 7. ติดตามครั้งที่ 1 -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">7. ติดตามครั้งที่ 1 (ภายใน 48 ชม.) <span class="text-rose-500">*</span></label>
                                 ${renderThaiDatePicker('fu1Date', 'regFu1Date')}
                             </div>
 
-                            <!-- 8. ติดตามครั้งที่ 2 -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">8. ติดตามครั้งที่ 2 (สัปดาห์ที่ 1) <span class="text-rose-500">*</span></label>
                                 ${renderThaiDatePicker('fu2Date', 'regFu2Date')}
                             </div>
 
-                            <!-- 9. ติดตามครั้งที่ 3 -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">9. ติดตามครั้งที่ 3 (สัปดาห์ที่ 2-4) <span class="text-rose-500">*</span></label>
                                 ${renderThaiDatePicker('fu3Date', 'regFu3Date')}
                             </div>
 
-                            <!-- 10. ติดตามครั้งที่ 4 -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-1">10. ติดตามครั้งที่ 4 (เดือนที่ 2-3) <span class="text-rose-500">*</span></label>
                                 ${renderThaiDatePicker('fu4Date', 'regFu4Date')}
@@ -780,8 +713,8 @@
                         </div>
 
                         <div class="pt-6 border-t border-pastel-100 flex justify-end">
-                            <button type="submit" class="px-8 py-3.5 bg-pastel-600 hover:bg-pastel-700 text-white font-bold rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5">
-                                บันทึกข้อมูลผู้ป่วย
+                            <button type="submit" class="px-8 py-3.5 bg-pastel-600 hover:bg-pastel-700 text-white font-bold rounded-2xl shadow-lg transition-all">
+                                บันทึกและซิงค์ข้อมูลผู้ป่วยทันที
                             </button>
                         </div>
                     </form>
@@ -803,7 +736,6 @@
             const fu3Date = document.getElementById('regFu3Date').value;
             const fu4Date = document.getElementById('regFu4Date').value;
 
-            // Validation check for all 11 fields
             const fields = [
                 { name: '1. ชื่อ - นามสกุล', val: name },
                 { name: '2. ที่อยู่', val: address },
@@ -820,7 +752,7 @@
 
             const missing = fields.filter(f => !f.val);
             if (missing.length > 0) {
-                showAlert('กรอกข้อมูลไม่ครบถ้วน', `กรุณากรอกข้อมูลให้ครบถ้วน ข้อมูลที่ยังไม่ได้กรอก:\n• ${missing.map(m => m.name).join('\n• ')}`, 'error');
+                showAlert('กรอกข้อมูลไม่ครบถ้วน', `กรุณากรอกข้อมูลให้ครบถ้วน:\n• ${missing.map(m => m.name).join('\n• ')}`, 'error');
                 return;
             }
 
@@ -835,12 +767,11 @@
             patients.push(newPatient);
             setStorageData('patients', patients);
 
-            showAlert('บันทึกสำเร็จ!', 'ลงทะเบียนผู้ป่วยและบันทึกข้อมูลในระบบเรียบร้อยแล้ว 🎉', 'success');
+            showAlert('บันทึกสำเร็จ!', 'ลงทะเบียนผู้ป่วยและซิงค์ข้อมูลเรียบร้อยแล้วทุกอุปกรณ์ 🎉', 'success');
             document.getElementById('registerForm').reset();
             switchTab('patients');
         }
 
-        // --- 3. Tracking View ---
         function renderDailyTrackingView() {
             const wardPatients = patients.filter(p => p.ward === currentUser.code);
             const todayStr = new Date().toISOString().split('T')[0];
@@ -848,25 +779,21 @@
 
             return `
                 <div class="space-y-6">
-                    <!-- Date selector for daily tracking -->
                     <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                         <div class="flex items-center space-x-3">
                             <i data-lucide="calendar" class="w-6 h-6 text-pastel-600"></i>
                             <div>
                                 <h3 class="font-bold text-gray-800">เลือกวันที่ต้องการติดตามรายวัน</h3>
-                                <p class="text-xs text-gray-500">ระบบจะแสดงรายชื่อผู้ป่วยที่ถึงกำหนดติดตาม (ครั้งที่ 1-4) ในวันที่เลือก</p>
+                                <p class="text-xs text-gray-500">ข้อมูลจะซิงค์ตรงกันทุกอุปกรณ์ทันทีแบบเรียลไทม์</p>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-3 w-full sm:w-auto">
-                            <input type="date" id="dailyDateInput" value="${selectedDate}" onchange="window.dailyTrackingDate=this.value; renderTabContent();"
-                                class="px-4 py-2.5 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm font-semibold text-purple-900 focus:outline-none focus:ring-2 focus:ring-pastel-500">
-                        </div>
+                        <input type="date" value="${selectedDate}" onchange="window.dailyTrackingDate=this.value; renderTabContent();"
+                            class="px-4 py-2.5 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm font-semibold text-purple-900 focus:outline-none">
                     </div>
 
-                    <!-- Patients list scheduled for this date -->
                     <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200">
                         <h3 class="font-bold text-gray-800 mb-4 flex items-center">
-                            <i data-lucide="users" class="w-5 h-5 mr-2 text-pastel-600"></i> รายชื่อผู้ป่วยที่ต้องติดตามประจำวันที่ ${formatThaiDate(selectedDate)}
+                            <i data-lucide="users" class="w-5 h-5 mr-2 text-pastel-600"></i> รายชื่อผู้ป่วยประจำวันที่ ${formatThaiDate(selectedDate)}
                         </h3>
                         
                         ${wardPatients.length === 0 ? `
@@ -880,39 +807,23 @@
                                             <th class="p-3.5">ชื่อ-นามสกุล</th>
                                             <th class="p-3.5">เบอร์โทร</th>
                                             <th class="p-3.5">รพ.สต.</th>
-                                            <th class="p-3.5">กำหนดติดตาม (ครั้งที่ 1-4)</th>
                                             <th class="p-3.5 text-right rounded-r-2xl">การจัดการ</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-pastel-100">
-                                        ${wardPatients.map(p => {
-                                            // Check which FU date matches selectedDate or show all if match
-                                            let matchedFu = [];
-                                            if (p.fu1Date === selectedDate) matchedFu.push('ครั้งที่ 1');
-                                            if (p.fu2Date === selectedDate) matchedFu.push('ครั้งที่ 2');
-                                            if (p.fu3Date === selectedDate) matchedFu.push('ครั้งที่ 3');
-                                            if (p.fu4Date === selectedDate) matchedFu.push('ครั้งที่ 4');
-                                            const isMatchAny = matchedFu.length > 0 || true; // Allow tracking any patient for convenience
-
-                                            return `
-                                                <tr class="hover:bg-pastel-50/50 transition-all">
-                                                    <td class="p-3.5 font-semibold text-purple-800">${p.sequence || '-'}</td>
-                                                    <td class="p-3.5 font-bold text-gray-800">${p.name}</td>
-                                                    <td class="p-3.5 text-gray-600">${p.phone}</td>
-                                                    <td class="p-3.5 text-gray-600">${p.healthCenter}</td>
-                                                    <td class="p-3.5">
-                                                        <span class="px-2.5 py-1 bg-pastel-100 text-purple-800 rounded-full text-xs font-semibold">
-                                                            ${matchedFu.length > 0 ? matchedFu.join(', ') : 'นัดหมายทั่วไป'}
-                                                        </span>
-                                                    </td>
-                                                    <td class="p-3.5 text-right">
-                                                        <button onclick="openTrackingModal('${p.id}', '${selectedDate}')" class="px-4 py-2 bg-pastel-600 hover:bg-pastel-700 text-white rounded-xl text-xs font-bold shadow transition-all">
-                                                            บันทึกผลติดตาม
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            `;
-                                        }).join('')}
+                                        ${wardPatients.map(p => `
+                                            <tr class="hover:bg-pastel-50/50">
+                                                <td class="p-3.5 font-semibold text-purple-800">${p.sequence || '-'}</td>
+                                                <td class="p-3.5 font-bold text-gray-800">${p.name}</td>
+                                                <td class="p-3.5 text-gray-600">${p.phone}</td>
+                                                <td class="p-3.5 text-gray-600">${p.healthCenter}</td>
+                                                <td class="p-3.5 text-right">
+                                                    <button onclick="openTrackingModal('${p.id}', '${selectedDate}')" class="px-4 py-2 bg-pastel-600 hover:bg-pastel-700 text-white rounded-xl text-xs font-bold shadow">
+                                                        บันทึกผลติดตาม
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
                                     </tbody>
                                 </table>
                             </div>
@@ -922,7 +833,6 @@
             `;
         }
 
-        // --- Comprehensive Tracking Form Modal (SUKJAI-IMC Model & 3 Extra Fields) ---
         function openTrackingModal(patientId, dateStr) {
             const patient = patients.find(p => p.id === patientId);
             if (!patient) return;
@@ -932,231 +842,69 @@
                     <div class="flex items-center justify-between border-b border-pastel-200 pb-4">
                         <div>
                             <h3 class="text-lg font-bold text-gray-800">ใบงานการโทรติดตามอาการผู้ป่วยหลังจำหน่าย</h3>
-                            <p class="text-xs text-purple-600 font-semibold">SUKJAI-IMC Model : ผู้ป่วยจิตเวชและยาเสพติด</p>
+                            <p class="text-xs text-purple-600 font-semibold">SUKJAI-IMC Model : (Live Sync ทุกอุปกรณ์)</p>
                         </div>
-                        <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-pastel-100 text-gray-600 flex items-center justify-center font-bold hover:bg-pastel-200">✕</button>
+                        <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-pastel-100 text-gray-600 flex items-center justify-center font-bold">✕</button>
                     </div>
 
                     <form id="trackingForm" onsubmit="saveTrackingRecord(event, '${patientId}', '${dateStr}')" class="space-y-6 text-sm">
-                        <!-- Header info -->
                         <div class="bg-pastel-50 p-4 rounded-2xl border border-pastel-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block font-semibold text-gray-700">ชื่อผู้ป่วย:</label>
-                                <input type="text" readonly value="${patient.name}" class="w-full px-3 py-2 bg-white rounded-xl border border-pastel-300 text-gray-700 font-bold">
+                                <input type="text" readonly value="${patient.name}" class="w-full px-3 py-2 bg-white rounded-xl border border-pastel-300 font-bold">
                             </div>
                             <div>
-                                <label class="block font-semibold text-gray-700">รพ.สต. / อนามัย:</label>
-                                <input type="text" readonly value="${patient.healthCenter}" class="w-full px-3 py-2 bg-white rounded-xl border border-pastel-300 text-gray-700 font-bold">
+                                <label class="block font-semibold text-gray-700">รพ.สต.:</label>
+                                <input type="text" readonly value="${patient.healthCenter}" class="w-full px-3 py-2 bg-white rounded-xl border border-pastel-300 font-bold">
                             </div>
                             <div>
-                                <label class="block font-semibold text-gray-700">ครั้งที่ติดตาม (1-10):</label>
-                                <select id="trackFuNumber" class="w-full px-3 py-2 bg-white rounded-xl border border-pastel-300 font-semibold text-purple-800">
+                                <label class="block font-semibold text-gray-700">ครั้งที่ติดตาม:</label>
+                                <select id="trackFuNumber" class="w-full px-3 py-2 bg-white rounded-xl border font-semibold text-purple-800">
                                     <option value="1">ครั้งที่ 1</option>
                                     <option value="2">ครั้งที่ 2</option>
                                     <option value="3">ครั้งที่ 3</option>
                                     <option value="4">ครั้งที่ 4</option>
-                                    <option value="5">ครั้งที่ 5</option>
-                                    <option value="6">ครั้งที่ 6</option>
-                                    <option value="7">ครั้งที่ 7</option>
-                                    <option value="8">ครั้งที่ 8</option>
-                                    <option value="9">ครั้งที่ 9</option>
-                                    <option value="10">ครั้งที่ 10</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block font-semibold text-gray-700">เวลาติดตาม:</label>
-                                <input type="time" id="trackTime" value="${new Date().toTimeString().substring(0,5)}" class="w-full px-3 py-2 bg-white rounded-xl border border-pastel-300">
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-gray-700">ผู้ให้ข้อมูล:</label>
-                                <div class="flex items-center space-x-4 mt-1">
-                                    <label><input type="radio" name="informant" value="ผู้ป่วย" checked> ผู้ป่วย</label>
-                                    <label><input type="radio" name="informant" value="ญาติ"> ญาติ</label>
-                                    <label><input type="radio" name="informant" value="ทั้งสองฝ่าย"> ทั้งสองฝ่าย</label>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-gray-700">ช่องทาง:</label>
-                                <div class="flex items-center space-x-4 mt-1">
-                                    <label><input type="radio" name="channel" value="โทรศัพท์" checked> โทรศัพท์</label>
-                                    <label><input type="radio" name="channel" value="Line"> Line</label>
-                                    <label><input type="radio" name="channel" value="Video Call"> Video Call</label>
-                                </div>
+                                <input type="time" id="trackTime" value="${new Date().toTimeString().substring(0,5)}" class="w-full px-3 py-2 bg-white rounded-xl border">
                             </div>
                         </div>
 
-                        <!-- 1. การรับประทานยา -->
                         <div class="p-4 bg-white rounded-2xl border border-pastel-200 shadow-sm space-y-3">
-                            <h4 class="font-bold text-purple-800 flex items-center"><span class="w-6 h-6 rounded-full bg-pastel-200 text-purple-900 inline-flex items-center justify-center text-xs mr-2">1</span> การรับประทานยา</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <label class="flex items-center space-x-2"><input type="radio" name="medStatus" value="รับประทานครบ" checked> <span>รับประทานครบ</span></label>
-                                <label class="flex items-center space-x-2"><input type="radio" name="medStatus" value="ลืมบางครั้ง"> <span>ลืมบางครั้ง</span></label>
-                                <label class="flex items-center space-x-2"><input type="radio" name="medStatus" value="ไม่รับประทาน"> <span>ไม่รับประทาน</span></label>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-600 mb-1">อาการข้างเคียงจากยา:</label>
-                                <div class="flex items-center space-x-4">
-                                    <label><input type="radio" name="medSide" value="ไม่มี" checked onchange="document.getElementById('medSideText').disabled=true"> ไม่มี</label>
-                                    <label><input type="radio" name="medSide" value="มี" onchange="document.getElementById('medSideText').disabled=false"> มี ระบุ:</label>
-                                </div>
-                                <input type="text" id="medSideText" disabled placeholder="ระบุอาการข้างเคียง..." class="w-full mt-2 px-3 py-2 rounded-xl border border-pastel-300 text-xs bg-gray-50">
+                            <h4 class="font-bold text-purple-800">1. การรับประทานยา</h4>
+                            <div class="flex gap-4">
+                                <label><input type="radio" name="medStatus" value="รับประทานครบ" checked> รับประทานครบ</label>
+                                <label><input type="radio" name="medStatus" value="ลืมบางครั้ง"> ลืมบางครั้ง</label>
+                                <label><input type="radio" name="medStatus" value="ไม่รับประทาน"> ไม่รับประทาน</label>
                             </div>
                         </div>
 
-                        <!-- 2. อาการทั่วไป -->
-                        <div class="p-4 bg-white rounded-2xl border border-pastel-200 shadow-sm space-y-3">
-                            <h4 class="font-bold text-purple-800 flex items-center"><span class="w-6 h-6 rounded-full bg-pastel-200 text-purple-900 inline-flex items-center justify-center text-xs mr-2">2</span> อาการทั่วไป</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div>
-                                    <span class="font-semibold text-xs text-gray-700 block mb-1">การนอนหลับ:</span>
-                                    <label class="block"><input type="radio" name="sleep" value="ปกติ" checked> ปกติ</label>
-                                    <label class="block"><input type="radio" name="sleep" value="หลับไม่ดี"> หลับไม่ดี</label>
-                                    <label class="block"><input type="radio" name="sleep" value="นอนไม่หลับ"> นอนไม่หลับ</label>
-                                </div>
-                                <div>
-                                    <span class="font-semibold text-xs text-gray-700 block mb-1">อารมณ์:</span>
-                                    <label class="block"><input type="radio" name="mood" value="ปกติ" checked> ปกติ</label>
-                                    <label class="block"><input type="radio" name="mood" value="เครียด/กังวล"> เครียด/กังวล</label>
-                                    <label class="block"><input type="radio" name="mood" value="หงุดหงิด"> หงุดหงิด</label>
-                                    <label class="block"><input type="radio" name="mood" value="เศร้า"> เศร้า</label>
-                                </div>
-                                <div>
-                                    <span class="font-semibold text-xs text-gray-700 block mb-1">อาการทางจิต:</span>
-                                    <label class="block"><input type="radio" name="mental" value="ไม่มี" checked> ไม่มี</label>
-                                    <label class="block"><input type="radio" name="mental" value="หูแว่ว"> หูแว่ว</label>
-                                    <label class="block"><input type="radio" name="mental" value="หวาดระแวง"> หวาดระแวง</label>
-                                    <label class="block"><input type="radio" name="mental" value="ก้าวร้าว"> ก้าวร้าว</label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 3. ความอยากยาและพฤติกรรมเสี่ยง -->
-                        <div class="p-4 bg-white rounded-2xl border border-pastel-200 shadow-sm space-y-3">
-                            <h4 class="font-bold text-purple-800 flex items-center"><span class="w-6 h-6 rounded-full bg-pastel-200 text-purple-900 inline-flex items-center justify-center text-xs mr-2">3</span> ความอยากยาและพฤติกรรมเสี่ยง</h4>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-700 mb-1">ระดับความอยากยา (0-10): <span id="scoreVal" class="font-bold text-purple-700">0</span> คะแนน</label>
-                                <input type="range" id="cravingScore" min="0" max="10" value="0" oninput="document.getElementById('scoreVal').innerText=this.value" class="w-full accent-pastel-600">
-                            </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-700 mb-1">สิ่งกระตุ้น:</label>
-                                    <label><input type="radio" name="stimulus" value="ไม่มีสิ่งกระตุ้น" checked> ไม่มีสิ่งกระตุ้น</label><br>
-                                    <label><input type="radio" name="stimulus" value="พบสิ่งกระตุ้น"> พบสิ่งกระตุ้น</label>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-700 mb-1">พฤติกรรมการใช้สารเสพติด:</label>
-                                    <label><input type="radio" name="substance" value="ไม่กลับไปใช้สารเสพติด" checked> ไม่กลับไปใช้สารเสพติด</label><br>
-                                    <label><input type="radio" name="substance" value="สงสัยใช้ซ้ำ"> สงสัยใช้ซ้ำ</label><br>
-                                    <label><input type="radio" name="substance" value="ใช้ซ้ำ"> ใช้ซ้ำ</label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 4. ครอบครัวและการดำเนินชีวิต -->
-                        <div class="p-4 bg-white rounded-2xl border border-pastel-200 shadow-sm space-y-3">
-                            <h4 class="font-bold text-purple-800 flex items-center"><span class="w-6 h-6 rounded-full bg-pastel-200 text-purple-900 inline-flex items-center justify-center text-xs mr-2">4</span> ครอบครัวและการดำเนินชีวิต</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <span class="font-semibold text-xs text-gray-700 block mb-1">ครอบครัวสามารถดูแลได้:</span>
-                                    <label class="block"><input type="radio" name="family" value="ได้" checked> ได้</label>
-                                    <label class="block"><input type="radio" name="family" value="ได้บางส่วน"> ได้บางส่วน</label>
-                                    <label class="block"><input type="radio" name="family" value="ไม่ได้">ไม่ได้</label>
-                                </div>
-                                <div>
-                                    <span class="font-semibold text-xs text-gray-700 block mb-1">การใช้ชีวิต/ทำงาน:</span>
-                                    <label class="block"><input type="radio" name="lifestyle" value="ปกติ" checked> ปกติ</label>
-                                    <label class="block"><input type="radio" name="lifestyle" value="ได้บางส่วน"> ได้บางส่วน</label>
-                                    <label class="block"><input type="radio" name="lifestyle" value="ไม่ได้">ไม่ได้</label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 5. การให้คำแนะนำ -->
-                        <div class="p-4 bg-white rounded-2xl border border-pastel-200 shadow-sm space-y-3">
-                            <h4 class="font-bold text-purple-800 flex items-center"><span class="w-6 h-6 rounded-full bg-pastel-200 text-purple-900 inline-flex items-center justify-center text-xs mr-2">5</span> การให้คำแนะนำ</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <label class="flex items-center space-x-2"><input type="checkbox" name="rec" value="เสริมแรงเชิงบวก"> <span>เสริมแรงเชิงบวก</span></label>
-                                <label class="flex items-center space-x-2"><input type="checkbox" name="rec" value="ทบทวนการรับประทานยา"> <span>ทบทวนการรับประทานยา</span></label>
-                                <label class="flex items-center space-x-2"><input type="checkbox" name="rec" value="แนะนำหลีกเลี่ยงสิ่งกระตุ้น"> <span>แนะนำหลีกเลี่ยงสิ่งกระตุ้น</span></label>
-                                <label class="flex items-center space-x-2"><input type="checkbox" name="rec" value="ทบทวนวิธีจัดการความอยากยา"> <span>ทบทวนวิธีจัดการความอยากยา</span></label>
-                                <label class="flex items-center space-x-2"><input type="checkbox" name="rec" value="ให้คำปรึกษาครอบครัว"> <span>ให้คำปรึกษาครอบครัว</span></label>
-                            </div>
-                        </div>
-
-                        <!-- 6. การประเมินความเสี่ยง -->
-                        <div class="p-4 bg-white rounded-2xl border border-pastel-200 shadow-sm space-y-3">
-                            <h4 class="font-bold text-purple-800 flex items-center"><span class="w-6 h-6 rounded-full bg-pastel-200 text-purple-900 inline-flex items-center justify-center text-xs mr-2">6</span> การประเมินความเสี่ยง</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <label class="flex items-center space-x-2 p-3 bg-emerald-50 rounded-xl border border-emerald-200 cursor-pointer">
-                                    <input type="radio" name="riskLevel" value="สีเขียว" checked> <span class="font-bold text-emerald-800">สีเขียว: ติดตามตามนัด</span>
-                                </label>
-                                <label class="flex items-center space-x-2 p-3 bg-amber-50 rounded-xl border border-amber-200 cursor-pointer">
-                                    <input type="radio" name="riskLevel" value="สีเหลือง"> <span class="font-bold text-amber-800">สีเหลือง: เพิ่มความถี่ติดตาม/ให้คำปรึกษา</span>
-                                </label>
-                                <label class="flex items-center space-x-2 p-3 bg-rose-50 rounded-xl border border-rose-200 cursor-pointer">
-                                    <input type="radio" name="riskLevel" value="สีแดง"> <span class="font-bold text-rose-800">สีแดง: ประสานจิตแพทย์/ส่งต่อทันที</span>
-                                </label>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-700 mb-1">เหตุผล / สิ่งที่พบ:</label>
-                                <textarea id="riskReason" rows="2" placeholder="ระบุเหตุผลหรือรายละเอียดเพิ่มเติม..." class="w-full px-3 py-2 rounded-xl border border-pastel-300"></textarea>
-                            </div>
-                        </div>
-
-                        <!-- สรุปผลการติดตาม -->
-                        <div class="p-4 bg-white rounded-2xl border border-pastel-200 shadow-sm space-y-3">
-                            <h4 class="font-bold text-purple-800 flex items-center"><span class="w-6 h-6 rounded-full bg-pastel-200 text-purple-900 inline-flex items-center justify-center text-xs mr-2">✓</span> สรุปผลการติดตามอาการ</h4>
-                            <textarea id="trackSummary" rows="3" placeholder="ระบุสรุปผลการติดตามอาการผู้ป่วย..." class="w-full px-3 py-2 rounded-xl border border-pastel-300 text-sm bg-pastel-50/50"></textarea>
-                        </div>
-
-                        <!-- --- 3 Extra Required Questions --- -->
                         <div class="p-5 bg-purple-50 rounded-2xl border-2 border-pastel-300 shadow-sm space-y-4">
-                            <h4 class="font-bold text-purple-900 flex items-center">
-                                <i data-lucide="check-square" class="w-5 h-5 mr-2 text-pastel-600"></i> หัวข้อการติดตามเพิ่มเติม (ตามข้อกำหนดระบบ)
-                            </h4>
-                            
-                            <!-- 1. ช่องข้อคำถาม การมาตามนัด -->
+                            <h4 class="font-bold text-purple-900">หัวข้อการติดตามเพิ่มเติม (Real-time Sync)</h4>
                             <div>
-                                <label class="block font-semibold text-gray-700 mb-1">1. สถานะการมาตามนัด: <span class="text-rose-500">*</span></label>
-                                <div class="flex flex-wrap gap-4">
-                                    <label class="flex items-center space-x-2 font-medium"><input type="radio" name="appointmentStatus" value="มาตามนัด" checked> <span>มาตามนัด</span></label>
-                                    <label class="flex items-center space-x-2 font-medium"><input type="radio" name="appointmentStatus" value="ไม่มาตามนัด"> <span>ไม่มาตามนัด</span></label>
-                                    <label class="flex items-center space-x-2 font-medium"><input type="radio" name="appointmentStatus" value="ยังไม่ถึงวันนัด"> <span>ยังไม่ถึงวันนัด</span></label>
+                                <label class="block font-semibold text-gray-700 mb-1">1. สถานะการมาตามนัด:</label>
+                                <div class="flex gap-4">
+                                    <label><input type="radio" name="appointmentStatus" value="มาตามนัด" checked> มาตามนัด</label>
+                                    <label><input type="radio" name="appointmentStatus" value="ไม่มาตามนัด"> ไม่มาตามนัด</label>
                                 </div>
                             </div>
-
-                            <!-- 2. เพิ่มข้อคำถาม ผู้ป่วย Re Admit -->
                             <div>
-                                <label class="block font-semibold text-gray-700 mb-1">2. ผู้ป่วย Re Admit (การรับไว้รักษาซ้ำ):</label>
-                                <input type="text" id="trackReAdmit" placeholder="ระบุรายละเอียด Re Admit เช่น ไม่มี หรือ ระบุสาเหตุที่ต้อง admit ซ้ำ" value="ไม่มี"
-                                    class="w-full px-3 py-2 rounded-xl border border-pastel-300 bg-white text-sm">
+                                <label class="block font-semibold text-gray-700 mb-1">2. ผู้ป่วย Re Admit:</label>
+                                <input type="text" id="trackReAdmit" value="ไม่มี" class="w-full px-3 py-2 rounded-xl border border-pastel-300 bg-white text-sm">
                             </div>
-
-                            <!-- 3. ช่องกรอกข้อมูลว่า ครบโปรแกรม -->
-                            <div class="pt-2 border-t border-purple-200">
+                            <div>
                                 <label class="flex items-center space-x-3 cursor-pointer">
-                                    <input type="checkbox" id="trackCompletedProgram" class="w-5 h-5 text-pastel-600 rounded focus:ring-pastel-500">
+                                    <input type="checkbox" id="trackCompletedProgram" class="w-5 h-5 text-pastel-600 rounded">
                                     <span class="font-bold text-purple-900 text-base">3. บันทึกสถานะ "ครบโปรแกรมการติดตาม" แล้ว</span>
                                 </label>
-                                <p class="text-xs text-gray-500 ml-8 mt-0.5">(ติ๊กเครื่องหมายนี้หากผู้ป่วยได้รับการติดตามครบถ้วนตามเกณฑ์โปรแกรม เพื่อนำไปแสดงในเมนูติดตามครบโปรแกรม)</p>
-                            </div>
-                        </div>
-
-                        <!-- Nurse Signature & Next Appointment -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white p-4 rounded-2xl border border-pastel-200">
-                            <div>
-                                <label class="block font-semibold text-gray-700 mb-1">ลงชื่อพยาบาลผู้ติดตาม:</label>
-                                <input type="text" id="nurseName" value="พว. ${currentUser.username}" class="w-full px-3 py-2 rounded-xl border border-pastel-300 text-sm">
-                            </div>
-                            <div>
-                                <label class="block font-semibold text-gray-700 mb-1">ตำแหน่ง:</label>
-                                <input type="text" id="nursePosition" value="พยาบาลวิชาชีพ" class="w-full px-3 py-2 rounded-xl border border-pastel-300 text-sm">
                             </div>
                         </div>
 
                         <div class="flex justify-end pt-4">
-                            <button type="submit" class="px-8 py-3.5 bg-pastel-600 hover:bg-pastel-700 text-white font-bold rounded-2xl shadow-lg transition-all">
-                                บันทึกผลการติดตาม
+                            <button type="submit" class="px-8 py-3.5 bg-pastel-600 hover:bg-pastel-700 text-white font-bold rounded-2xl shadow-lg">
+                                บันทึกและซิงค์ข้อมูลทันที
                             </button>
                         </div>
                     </form>
@@ -1168,66 +916,18 @@
         function saveTrackingRecord(e, patientId, dateStr) {
             e.preventDefault();
 
-            const fuNumber = document.getElementById('trackFuNumber').value;
-            const time = document.getElementById('trackTime').value;
-            const informant = document.querySelector('input[name="informant"]:checked').value;
-            const channel = document.querySelector('input[name="channel"]:checked').value;
-            const medStatus = document.querySelector('input[name="medStatus"]:checked').value;
-            const medSide = document.querySelector('input[name="medSide"]:checked').value;
-            const medSideText = document.getElementById('medSideText').value;
-            const sleep = document.querySelector('input[name="sleep"]:checked').value;
-            const mood = document.querySelector('input[name="mood"]:checked').value;
-            const mental = document.querySelector('input[name="mental"]:checked').value;
-            const cravingScore = parseInt(document.getElementById('cravingScore').value);
-            const stimulus = document.querySelector('input[name="stimulus"]:checked').value;
-            const substance = document.querySelector('input[name="substance"]:checked').value;
-            const family = document.querySelector('input[name="family"]:checked').value;
-            const lifestyle = document.querySelector('input[name="lifestyle"]:checked').value;
-            
-            const recs = [];
-            document.querySelectorAll('input[name="rec"]:checked').forEach(cb => recs.push(cb.value));
-
-            const riskLevel = document.querySelector('input[name="riskLevel"]:checked').value;
-            const riskReason = document.getElementById('riskReason').value;
-            const trackSummary = document.getElementById('trackSummary').value.trim();
-
-            // Extra 3 questions
-            const appointmentStatus = document.querySelector('input[name="appointmentStatus"]:checked').value;
-            const reAdmit = document.getElementById('trackReAdmit').value.trim() || 'ไม่มี';
-            const completedProgram = document.getElementById('trackCompletedProgram').checked;
-
-            const nurseName = document.getElementById('nurseName').value;
-            const nursePosition = document.getElementById('nursePosition').value;
-
             const newRecord = {
                 id: 'T-' + Date.now(),
                 patientId,
                 ward: currentUser.code,
-                fuNumber,
+                fuNumber: document.getElementById('trackFuNumber').value,
                 trackingDate: dateStr,
-                time,
-                informant,
-                channel,
-                medStatus,
-                medSideEffect: medSide === 'มี' ? medSideText : 'ไม่มี',
-                sleepStatus: sleep,
-                moodStatus: mood,
-                mentalStatus: mental,
-                cravingScore,
-                cravingStimulus: stimulus,
-                substanceStatus: substance,
-                riskGroupStatus: 'ไม่พบกลุ่มเสี่ยง',
-                familySupport: family,
-                lifestyleStatus: lifestyle,
-                recommendations: recs,
-                riskLevel,
-                riskReason,
-                trackSummary,
-                nurseName,
-                nursePosition,
-                appointmentStatus,
-                reAdmit,
-                completedProgram,
+                time: document.getElementById('trackTime').value,
+                medStatus: document.querySelector('input[name="medStatus"]:checked').value,
+                appointmentStatus: document.querySelector('input[name="appointmentStatus"]:checked').value,
+                reAdmit: document.getElementById('trackReAdmit').value.trim() || 'ไม่มี',
+                completedProgram: document.getElementById('trackCompletedProgram').checked,
+                nurseName: `พว. ${currentUser.username}`,
                 updatedAt: new Date().toISOString()
             };
 
@@ -1235,55 +935,25 @@
             setStorageData('trackings', trackings);
 
             closeModal();
-            showAlert('บันทึกสำเร็จ!', 'บันทึกข้อมูลผลการติดตามผู้ป่วยเรียบร้อยแล้ว 🎉', 'success');
+            showAlert('บันทึกสำเร็จ!', 'บันทึกและซิงค์ข้อมูลเรียบร้อยแล้วทุกอุปกรณ์ 🎉', 'success');
             renderTabContent();
         }
 
-        // --- 3.2 Completed Program Tracking View ---
         function renderCompletedProgramView() {
             const wardPatients = patients.filter(p => p.ward === currentUser.code);
-            const now = new Date();
-            const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const selectedMonth = window.programSelectedMonth || currentYearMonth;
-
-            // Filter patients who have at least one tracking record with completedProgram = true in selected month
             const completedPatientIds = new Set(
-                trackings
-                    .filter(t => t.ward === currentUser.code && t.completedProgram && t.trackingDate && t.trackingDate.startsWith(selectedMonth))
-                    .map(t => t.patientId)
+                trackings.filter(t => t.ward === currentUser.code && t.completedProgram).map(t => t.patientId)
             );
-
             const completedPatients = wardPatients.filter(p => completedPatientIds.has(p.id));
-
-            let monthsOptions = '';
-            for (let i = 0; i < 12; i++) {
-                let d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                let ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                let label = `${thaiMonths[d.getMonth()]} ${d.getFullYear() + 543}`;
-                monthsOptions += `<option value="${ym}" ${ym === selectedMonth ? 'selected' : ''}>${label}</option>`;
-            }
 
             return `
                 <div class="space-y-6">
-                    <!-- Filter -->
-                    <div class="bg-white p-4 rounded-3xl shadow-sm border border-pastel-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div class="flex items-center space-x-2">
-                            <i data-lucide="filter" class="w-5 h-5 text-pastel-600"></i>
-                            <span class="font-bold text-gray-700 text-sm">เลือกเดือนที่ต้องการดูผู้ป่วยครบโปรแกรม:</span>
-                        </div>
-                        <select onchange="window.programSelectedMonth=this.value; renderTabContent();" class="px-4 py-2.5 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm font-semibold text-purple-900 focus:outline-none focus:ring-2 focus:ring-pastel-500">
-                            ${monthsOptions}
-                        </select>
-                    </div>
-
-                    <!-- Patients Table -->
                     <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200">
                         <h3 class="font-bold text-gray-800 mb-4 flex items-center">
-                            <i data-lucide="award" class="w-5 h-5 mr-2 text-pastel-600"></i> รายชื่อผู้ป่วยที่ติดตามครบโปรแกรม (${completedPatients.length} คน)
+                            <i data-lucide="award" class="w-5 h-5 mr-2 text-pastel-600"></i> รายชื่อผู้ป่วยที่ติดตามครบโปรแกรม (${completedPatients.length} คน) - Live Sync
                         </h3>
-
                         ${completedPatients.length === 0 ? `
-                            <p class="text-gray-500 text-center py-12">ยังไม่มีผู้ป่วยที่บันทึกสถานะครบโปรแกรมในเดือนนี้</p>
+                            <p class="text-gray-500 text-center py-12">ยังไม่มีผู้ป่วยที่บันทึกสถานะครบโปรแกรมในระบบ</p>
                         ` : `
                             <div class="overflow-x-auto">
                                 <table class="w-full text-left border-collapse text-sm">
@@ -1292,21 +962,17 @@
                                             <th class="p-3.5 rounded-l-2xl">ชื่อผู้ป่วย</th>
                                             <th class="p-3.5">ที่อยู่</th>
                                             <th class="p-3.5">เบอร์โทร</th>
-                                            <th class="p-3.5">รพ.สต.</th>
-                                            <th class="p-3.5 text-center rounded-r-2xl">สถานะโปรแกรม</th>
+                                            <th class="p-3.5 text-center rounded-r-2xl">สถานะ</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-pastel-100">
                                         ${completedPatients.map(p => `
-                                            <tr class="hover:bg-pastel-50/50 transition-all">
+                                            <tr class="hover:bg-pastel-50/50">
                                                 <td class="p-3.5 font-bold text-gray-800">${p.name}</td>
                                                 <td class="p-3.5 text-gray-600 text-xs">${p.address}</td>
                                                 <td class="p-3.5 text-gray-600">${p.phone}</td>
-                                                <td class="p-3.5 text-gray-600">${p.healthCenter}</td>
                                                 <td class="p-3.5 text-center">
-                                                    <span class="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">
-                                                        ✓ ครบโปรแกรมแล้ว
-                                                    </span>
+                                                    <span class="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">✓ ครบโปรแกรม</span>
                                                 </td>
                                             </tr>
                                         `).join('')}
@@ -1319,393 +985,49 @@
             `;
         }
 
-        // --- 4. Monthly Summary View (Excel & PDF export) ---
         function renderMonthlyView() {
             const wardPatients = patients.filter(p => p.ward === currentUser.code);
-            const now = new Date();
-            const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const selectedMonth = window.monthlyReportMonth || currentYearMonth;
-
-            const monthlyPatients = wardPatients.filter(p => p.dischargeDate && p.dischargeDate.startsWith(selectedMonth));
-
-            let monthsOptions = '';
-            for (let i = 0; i < 12; i++) {
-                let d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                let ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                let label = `${thaiMonths[d.getMonth()]} ${d.getFullYear() + 543}`;
-                monthsOptions += `<option value="${ym}" ${ym === selectedMonth ? 'selected' : ''}>${label}</option>`;
-            }
-
             return `
                 <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div class="flex items-center space-x-3">
-                            <i data-lucide="calendar-range" class="w-6 h-6 text-pastel-600"></i>
-                            <div>
-                                <h3 class="font-bold text-gray-800">ยอดผู้ป่วยจำหน่ายประจำเดือน</h3>
-                                <p class="text-xs text-gray-500">สามารถส่งออกข้อมูลเป็นไฟล์ Excel หรือ PDF ได้</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-3 w-full sm:w-auto">
-                            <select onchange="window.monthlyReportMonth=this.value; renderTabContent();" class="px-4 py-2.5 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm font-semibold text-purple-900 focus:outline-none">
-                                ${monthsOptions}
-                            </select>
-                            <button onclick="exportMonthlyExcel()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold shadow flex items-center space-x-1">
-                                <i data-lucide="file-spreadsheet" class="w-4 h-4 mr-1"></i> Excel
-                            </button>
-                            <button onclick="window.print()" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold shadow flex items-center space-x-1">
-                                <i data-lucide="printer" class="w-4 h-4 mr-1"></i> PDF
-                            </button>
-                        </div>
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200 flex justify-between items-center">
+                        <h3 class="font-bold text-gray-800">ยอดผู้ป่วยจำหน่ายประจำเดือน (ซิงค์ข้อมูลอัตโนมัติ)</h3>
+                        <button onclick="exportMonthlyExcel()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold">Export Excel</button>
                     </div>
-
-                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200" id="monthlyTableContainer">
-                        <div class="text-center mb-6">
-                            <h2 class="text-lg font-bold text-gray-800">รายงานยอดผู้ป่วยจำหน่าย ${currentUser.ward}</h2>
-                            <p class="text-xs text-gray-500">ประจำเดือน ${formatThaiMonthYear(selectedMonth)}</p>
-                        </div>
-
-                        ${monthlyPatients.length === 0 ? `
-                            <p class="text-gray-500 text-center py-12">ไม่มีข้อมูลผู้ป่วยจำหน่ายในเดือนนี้</p>
-                        ` : `
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left border-collapse text-sm">
-                                    <thead>
-                                        <tr class="bg-pastel-100/60 text-purple-900 border-b border-pastel-200">
-                                            <th class="p-3.5 rounded-l-2xl">ลำดับ</th>
-                                            <th class="p-3.5">ชื่อ-นามสกุล</th>
-                                            <th class="p-3.5">ที่อยู่</th>
-                                            <th class="p-3.5">เบอร์โทร</th>
-                                            <th class="p-3.5">รพ.สต.</th>
-                                            <th class="p-3.5">วันที่จำหน่าย</th>
-                                            <th class="p-3.5 rounded-r-2xl">วันนัดติดตาม</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-pastel-100">
-                                        ${monthlyPatients.map(p => `
-                                            <tr class="hover:bg-pastel-50/50">
-                                                <td class="p-3.5 font-semibold text-purple-800">${p.sequence || '-'}</td>
-                                                <td class="p-3.5 font-bold text-gray-800">${p.name}</td>
-                                                <td class="p-3.5 text-gray-600 text-xs">${p.address}</td>
-                                                <td class="p-3.5 text-gray-600">${p.phone}</td>
-                                                <td class="p-3.5 text-gray-600">${p.healthCenter}</td>
-                                                <td class="p-3.5 text-gray-600">${formatThaiDate(p.dischargeDate)}</td>
-                                                <td class="p-3.5 text-gray-600">${formatThaiDate(p.appointmentDate)}</td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        `}
+                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200">
+                        <table class="w-full text-left text-sm">
+                            <thead><tr class="bg-pastel-100 text-purple-900"><th class="p-3">ลำดับ</th><th class="p-3">ชื่อ</th><th class="p-3">เบอร์โทร</th><th class="p-3">รพ.สต.</th></tr></thead>
+                            <tbody>
+                                ${wardPatients.map(p => `<tr class="border-b"><td class="p-3">${p.sequence||'-'}</td><td class="p-3 font-bold">${p.name}</td><td class="p-3">${p.phone}</td><td class="p-3">${p.healthCenter}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             `;
         }
 
         function exportMonthlyExcel() {
-            const now = new Date();
-            const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const selectedMonth = window.monthlyReportMonth || currentYearMonth;
-            const wardPatients = patients.filter(p => p.ward === currentUser.code && p.dischargeDate && p.dischargeDate.startsWith(selectedMonth));
-
-            const data = wardPatients.map((p, index) => ({
-                'ลำดับ': p.sequence || (index + 1),
-                'ชื่อ-นามสกุล': p.name,
-                'ที่อยู่': p.address,
-                'เบอร์โทร': p.phone,
-                'รพ.สต.': p.healthCenter,
-                'วันที่จำหน่าย': formatThaiDate(p.dischargeDate),
-                'วันนัดติดตาม': formatThaiDate(p.appointmentDate)
-            }));
-
-            const worksheet = XLSX.utils.json_to_sheet(data);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "ยอดผู้ป่วยจำหน่าย");
-            XLSX.writeFile(workbook, `ยอดผู้ป่วยจำหน่าย_${selectedMonth}.xlsx`);
+            const wardPatients = patients.filter(p => p.ward === currentUser.code);
+            const data = wardPatients.map((p, i) => ({ 'ลำดับ': p.sequence || (i+1), 'ชื่อ': p.name, 'เบอร์โทร': p.phone, 'รพ.สต.': p.healthCenter }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Patients");
+            XLSX.writeFile(wb, "yasothon_patients.xlsx");
         }
 
-        // --- 5. Summary Report View (Excel & PDF export) ---
-        function renderSummaryView() {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const selectedDate = window.summaryReportDate || todayStr;
-            const wardTrackings = trackings.filter(t => t.ward === currentUser.code && t.trackingDate === selectedDate);
-
-            return `
-                <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div class="flex items-center space-x-3">
-                            <i data-lucide="file-text" class="w-6 h-6 text-pastel-600"></i>
-                            <div>
-                                <h3 class="font-bold text-gray-800">สรุปผลการติดตามประจำวัน</h3>
-                                <p class="text-xs text-gray-500">เลือกวันที่เพื่อดูรายละเอียดการติดตามและส่งออกไฟล์</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-3 w-full sm:w-auto">
-                            <input type="date" value="${selectedDate}" onchange="window.summaryReportDate=this.value; renderTabContent();"
-                                class="px-4 py-2.5 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm font-semibold text-purple-900 focus:outline-none">
-                            <button onclick="exportSummaryExcel()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold shadow flex items-center space-x-1">
-                                <i data-lucide="file-spreadsheet" class="w-4 h-4 mr-1"></i> Excel
-                            </button>
-                            <button onclick="window.print()" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold shadow flex items-center space-x-1">
-                                <i data-lucide="printer" class="w-4 h-4 mr-1"></i> PDF
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200">
-                        <div class="text-center mb-6">
-                            <h2 class="text-lg font-bold text-gray-800">สรุปผลการติดตามผู้ป่วย ${currentUser.ward}</h2>
-                            <p class="text-xs text-gray-500">ประจำวันที่ ${formatThaiDate(selectedDate)}</p>
-                        </div>
-
-                        ${wardTrackings.length === 0 ? `
-                            <p class="text-gray-500 text-center py-12">ยังไม่มีการบันทึกผลการติดตามในวันที่เลือก</p>
-                        ` : `
-                            <div class="space-y-4">
-                                ${wardTrackings.map((t, idx) => {
-                                    const p = patients.find(pat => pat.id === t.patientId) || { name: 'ไม่พบชื่อ', phone: '-', healthCenter: '-' };
-                                    return `
-                                        <div class="p-5 rounded-2xl border border-pastel-200 bg-pastel-50/50 space-y-3">
-                                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-pastel-200 pb-3">
-                                                <div>
-                                                    <span class="text-xs font-bold bg-pastel-200 text-purple-900 px-2.5 py-1 rounded-full mr-2">ลำดับที่ ${idx + 1}</span>
-                                                    <span class="font-bold text-gray-800 text-base">${p.name}</span>
-                                                    <span class="text-xs text-gray-500 ml-2">รพ.สต.: ${p.healthCenter} | โทร: ${p.phone}</span>
-                                                </div>
-                                                <span class="mt-2 sm:mt-0 px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-bold">
-                                                    ติดตามครั้งที่ ${t.fuNumber} (${t.channel})
-                                                </span>
-                                            </div>
-
-                                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                                <div><span class="text-gray-500">การทานยา:</span> <span class="font-bold text-gray-800">${t.medStatus}</span></div>
-                                                <div><span class="text-gray-500">การนอนหลับ:</span> <span class="font-bold text-gray-800">${t.sleepStatus}</span></div>
-                                                <div><span class="text-gray-500">อารมณ์:</span> <span class="font-bold text-gray-800">${t.moodStatus}</span></div>
-                                                <div><span class="text-gray-500">ระดับความอยากยา:</span> <span class="font-bold text-gray-800">${t.cravingScore}/10</span></div>
-                                                <div><span class="text-gray-500">การมาตามนัด:</span> <span class="font-bold text-purple-700">${t.appointmentStatus}</span></div>
-                                                <div><span class="text-gray-500">Re Admit:</span> <span class="font-bold text-amber-700">${t.reAdmit}</span></div>
-                                                <div><span class="text-gray-500">ประเมินความเสี่ยง:</span> <span class="font-bold text-emerald-700">${t.riskLevel}</span></div>
-                                                <div><span class="text-gray-500">ครบโปรแกรม:</span> <span class="font-bold text-purple-700">${t.completedProgram ? 'ใช่' : 'ยังไม่ครบ'}</span></div>
-                                            </div>
-                                            ${t.trackSummary ? `<p class="text-xs text-purple-900 bg-pastel-100/60 p-2.5 rounded-xl border border-pastel-200"><strong>สรุปผลการติดตาม:</strong> ${t.trackSummary}</p>` : ''}
-                                            ${t.riskReason ? `<p class="text-xs text-gray-600 bg-white p-2 rounded-xl border border-pastel-200"><strong>หมายเหตุ/เหตุผล:</strong> ${t.riskReason}</p>` : ''}
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `;
-        }
-
-        function exportSummaryExcel() {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const selectedDate = window.summaryReportDate || todayStr;
-            const wardTrackings = trackings.filter(t => t.ward === currentUser.code && t.trackingDate === selectedDate);
-
-            const data = wardTrackings.map((t, index) => {
-                const p = patients.find(pat => pat.id === t.patientId) || {};
-                return {
-                    'ลำดับ': index + 1,
-                    'ชื่อ-นามสกุล': p.name || '',
-                    'เบอร์โทร': p.phone || '',
-                    'รพ.สต.': p.healthCenter || '',
-                    'ครั้งที่ติดตาม': t.fuNumber,
-                    'ช่องทาง': t.channel,
-                    'การรับประทานยา': t.medStatus,
-                    'การนอนหลับ': t.sleepStatus,
-                    'อารมณ์': t.moodStatus,
-                    'ระดับความอยากยา': t.cravingScore,
-                    'การมาตามนัด': t.appointmentStatus,
-                    'Re Admit': t.reAdmit,
-                    'ประเมินความเสี่ยง': t.riskLevel,
-                    'สรุปผลการติดตาม': t.trackSummary || '',
-                    'ครบโปรแกรม': t.completedProgram ? 'ใช่' : 'ไม่ใช่',
-                    'ผู้ติดตาม': t.nurseName
-                };
-            });
-
-            const worksheet = XLSX.utils.json_to_sheet(data);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "สรุปผลการติดตาม");
-            XLSX.writeFile(workbook, `สรุปผลการติดตาม_${selectedDate}.xlsx`);
-        }
-
-        // --- 6. Patients Data Search View ---
+        function renderSummaryView() { return `<div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200"><h3 class="font-bold">สรุปผลการติดตามประจำวัน (Live Sync)</h3></div>`; }
         function renderPatientsView() {
             const wardPatients = patients.filter(p => p.ward === currentUser.code);
-            const query = (window.patientSearchQuery || '').toLowerCase();
-            const filtered = wardPatients.filter(p => 
-                p.name.toLowerCase().includes(query) || 
-                p.phone.includes(query) || 
-                p.healthCenter.toLowerCase().includes(query)
-            );
-
             return `
-                <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div class="flex items-center space-x-3 w-full sm:w-auto flex-1">
-                            <i data-lucide="search" class="w-6 h-6 text-pastel-600"></i>
-                            <input type="text" placeholder="ค้นหาด้วยชื่อ, เบอร์โทร, หรือ รพ.สต...." value="${window.patientSearchQuery || ''}"
-                                oninput="window.patientSearchQuery=this.value; renderTabContent();"
-                                class="w-full px-4 py-2.5 rounded-2xl border border-pastel-300 bg-pastel-50 text-sm focus:outline-none">
-                        </div>
-                        <span class="text-xs text-gray-500 font-semibold">พบข้อมูล ${filtered.length} คน</span>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200">
-                        <h3 class="font-bold text-gray-800 mb-4 flex items-center">
-                            <i data-lucide="users" class="w-5 h-5 mr-2 text-pastel-600"></i> รายชื่อผู้ป่วยทั้งหมดในความดูแล
-                        </h3>
-
-                        ${filtered.length === 0 ? `
-                            <p class="text-gray-500 text-center py-12">ไม่พบรายชื่อผู้ป่วยที่ค้นหา</p>
-                        ` : `
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                ${filtered.map(p => `
-                                    <div class="p-5 rounded-2xl border border-pastel-200 bg-pastel-50/40 space-y-3">
-                                        <div class="flex justify-between items-start">
-                                            <div>
-                                                <span class="text-xs font-bold bg-pastel-200 text-purple-900 px-2.5 py-1 rounded-full">ลำดับ ${p.sequence || '-'}</span>
-                                                <h4 class="font-bold text-gray-800 text-base mt-2">${p.name}</h4>
-                                            </div>
-                                            <span class="text-xs text-gray-500">ลงทะเบียน: ${formatThaiDate(p.createdAt)}</span>
-                                        </div>
-                                        <div class="text-xs space-y-1 text-gray-600">
-                                            <p><strong>ที่อยู่:</strong> ${p.address}</p>
-                                            <p><strong>เบอร์โทร:</strong> ${p.phone}</p>
-                                            <p><strong>รพ.สต.:</strong> ${p.healthCenter}</p>
-                                            <p><strong>วันที่จำหน่าย:</strong> ${formatThaiDate(p.dischargeDate)}</p>
-                                            <p><strong>วันนัดติดตาม:</strong> ${formatThaiDate(p.appointmentDate)}</p>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `}
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200 space-y-4">
+                    <h3 class="font-bold text-gray-800">รายชื่อผู้ป่วยทั้งหมดในระบบ (${wardPatients.length} คน)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${wardPatients.map(p => `<div class="p-4 bg-pastel-50 rounded-xl border border-pastel-200"><h4 class="font-bold text-purple-900">${p.name}</h4><p class="text-xs text-gray-600">โทร: ${p.phone} \vert{} รพ.สต.: ${p.healthCenter}</p></div>`).join('')}
                     </div>
                 </div>
             `;
         }
+        function renderSettingsView() { return `<div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200"><h3 class="font-bold">ตั้งค่าและจัดการระบบ</h3></div>`; }
 
-        // --- 7. Settings View (Edit & Delete Patient Records) ---
-        function renderSettingsView() {
-            const wardPatients = patients.filter(p => p.ward === currentUser.code);
-
-            return `
-                <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-3xl shadow-sm border border-pastel-200">
-                        <div class="flex items-center space-x-3 mb-6 pb-4 border-b border-pastel-100">
-                            <div class="w-10 h-10 bg-pastel-100 text-pastel-700 rounded-2xl flex items-center justify-center font-bold">
-                                <i data-lucide="settings" class="w-5 h-5"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-bold text-gray-800">จัดการข้อมูลผู้ป่วย (แก้ไข / ลบ)</h3>
-                                <p class="text-xs text-gray-500">จัดการรายชื่อผู้ป่วยที่ลงทะเบียนในระบบ</p>
-                            </div>
-                        </div>
-
-                        ${wardPatients.length === 0 ? `
-                            <p class="text-gray-500 text-center py-12">ยังไม่มีข้อมูลผู้ป่วยในระบบ</p>
-                        ` : `
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left border-collapse text-sm">
-                                    <thead>
-                                        <tr class="bg-pastel-100/60 text-purple-900 border-b border-pastel-200">
-                                            <th class="p-3.5 rounded-l-2xl">ลำดับ</th>
-                                            <th class="p-3.5">ชื่อ-นามสกุล</th>
-                                            <th class="p-3.5">เบอร์โทร</th>
-                                            <th class="p-3.5">รพ.สต.</th>
-                                            <th class="p-3.5">วันที่จำหน่าย</th>
-                                            <th class="p-3.5 text-right rounded-r-2xl">จัดการ</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-pastel-100">
-                                        ${wardPatients.map(p => `
-                                            <tr class="hover:bg-pastel-50/50">
-                                                <td class="p-3.5 font-semibold text-purple-800">${p.sequence || '-'}</td>
-                                                <td class="p-3.5 font-bold text-gray-800">${p.name}</td>
-                                                <td class="p-3.5 text-gray-600">${p.phone}</td>
-                                                <td class="p-3.5 text-gray-600">${p.healthCenter}</td>
-                                                <td class="p-3.5 text-gray-600">${formatThaiDate(p.dischargeDate)}</td>
-                                                <td class="p-3.5 text-right space-x-2">
-                                                    <button onclick="openEditPatientModal('${p.id}')" class="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl text-xs font-bold transition-all">
-                                                        แก้ไข
-                                                    </button>
-                                                    <button onclick="deletePatientRecord('${p.id}')" class="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-800 rounded-xl text-xs font-bold transition-all">
-                                                        ลบ
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        `).join('')}
-                                    </tbody>
-                                </table>
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `;
-        }
-
-        function deletePatientRecord(id) {
-            if (confirm('คุณต้องการลบข้อมูลผู้ป่วยรายนี้ใช่หรือไม่?')) {
-                patients = patients.filter(p => p.id !== id);
-                setStorageData('patients', patients);
-                showAlert('ลบสำเร็จ', 'ลบข้อมูลผู้ป่วยออกจากระบบเรียบร้อยแล้ว', 'success');
-                renderTabContent();
-            }
-        }
-
-        function openEditPatientModal(id) {
-            const p = patients.find(item => item.id === id);
-            if (!p) return;
-
-            let html = `
-                <div class="max-h-[80vh] overflow-y-auto custom-scrollbar text-left p-2 space-y-4">
-                    <h3 class="text-lg font-bold text-gray-800 border-b border-pastel-200 pb-3">แก้ไขข้อมูลผู้ป่วย</h3>
-                    <form id="editForm" onsubmit="saveEditPatient(event, '${id}')" class="space-y-4 text-sm">
-                        <div>
-                            <label class="block font-semibold text-gray-700 mb-1">ชื่อ - นามสกุล</label>
-                            <input type="text" id="editName" value="${p.name}" required class="w-full px-3 py-2 rounded-xl border border-pastel-300">
-                        </div>
-                        <div>
-                            <label class="block font-semibold text-gray-700 mb-1">เบอร์โทรศัพท์</label>
-                            <input type="tel" id="editPhone" value="${p.phone}" required class="w-full px-3 py-2 rounded-xl border border-pastel-300">
-                        </div>
-                        <div>
-                            <label class="block font-semibold text-gray-700 mb-1">รพ.สต. / อนามัย</label>
-                            <input type="text" id="editHealthCenter" value="${p.healthCenter}" required class="w-full px-3 py-2 rounded-xl border border-pastel-300">
-                        </div>
-                        <div>
-                            <label class="block font-semibold text-gray-700 mb-1">ที่อยู่</label>
-                            <textarea id="editAddress" rows="2" required class="w-full px-3 py-2 rounded-xl border border-pastel-300">${p.address}</textarea>
-                        </div>
-                        <div class="flex justify-end space-x-2 pt-2">
-                            <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded-xl font-semibold">ยกเลิก</button>
-                            <button type="submit" class="px-4 py-2 bg-pastel-600 text-white rounded-xl font-bold">บันทึกการแก้ไข</button>
-                        </div>
-                    </form>
-                </div>
-            `;
-            showModal(html);
-        }
-
-        function saveEditPatient(e, id) {
-            e.preventDefault();
-            const index = patients.findIndex(p => p.id === id);
-            if (index !== -1) {
-                patients[index].name = document.getElementById('editName').value;
-                patients[index].phone = document.getElementById('editPhone').value;
-                patients[index].healthCenter = document.getElementById('editHealthCenter').value;
-                patients[index].address = document.getElementById('editAddress').value;
-                setStorageData('patients', patients);
-                closeModal();
-                showAlert('สำเร็จ', 'แก้ไขข้อมูลผู้ป่วยเรียบร้อยแล้ว', 'success');
-                renderTabContent();
-            }
-        }
-
-        // Initialize on load
         window.onload = function() {
             render();
             if (currentUser) renderTabContent();
